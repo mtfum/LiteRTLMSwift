@@ -4,11 +4,11 @@
 > Google has announced that an [official Swift API is coming soon](https://ai.google.dev/edge/litert-lm).
 > Once the official iOS support is available, this repository will be **archived**.
 
-A Swift Package for distributing the [LiteRT-LM](https://ai.google.dev/edge/litert-lm) xcframework for iOS.
+A Swift Package for distributing the [LiteRT-LM](https://ai.google.dev/edge/litert-lm) xcframework for iOS and macOS.
 
 ## Requirements
 
-- iOS 16.0+
+- iOS 16.0+ / macOS 13.0+
 - Xcode 16.0+
 - A `.litertlm` model file (e.g., `gemma-4-E2B-it.litertlm`)
 
@@ -20,7 +20,7 @@ Add the following to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/mtfum/LiteRTLMSwift.git", from: "0.1.0"),
+    .package(url: "https://github.com/mtfum/LiteRTLMSwift.git", from: "0.2.0"),
 ]
 ```
 
