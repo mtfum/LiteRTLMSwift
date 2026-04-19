@@ -6,7 +6,6 @@ let package = Package(
     name: "LiteRTLMSwift",
     platforms: [
         .iOS(.v16),
-        .macOS(.v13),
     ],
     products: [
         .library(
@@ -17,7 +16,8 @@ let package = Package(
     targets: [
         .binaryTarget(
             name: "LiteRTLM",
-            path: "Frameworks/LiteRTLM.xcframework"
+            url: "https://github.com/mtfum/LiteRTLMSwift/releases/download/0.1.0/LiteRTLM.xcframework.zip",
+            checksum: "6362074716e913deedb20016effa7fcb93fffcb78405b6c7f2dc324c5d6ced21"
         ),
     ]
 )
