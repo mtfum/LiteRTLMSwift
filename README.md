@@ -4,7 +4,9 @@
 > Google has announced that an [official Swift API is coming soon](https://ai.google.dev/edge/litert-lm).
 > Once official support is available, this repository will be **archived**.
 
-A Swift Package for distributing the [LiteRT-LM](https://ai.google.dev/edge/litert-lm) xcframework for iOS and macOS.
+A Swift Package that wraps the [LiteRT-LM](https://ai.google.dev/edge/litert-lm) on-device LLM engine with a Swift-native API — streaming text generation, audio transcription, and tool calling — for iOS and macOS.
+
+**No bridging header. No manual linker flags. Just `import LiteRTLMSwift`.**
 
 ## Requirements
 
@@ -16,142 +18,175 @@ A Swift Package for distributing the [LiteRT-LM](https://ai.google.dev/edge/lite
 
 ### Swift Package Manager
 
-Add the following to your `Package.swift`:
+Add the package in Xcode via **File > Add Package Dependencies...** and enter:
+
+```
+https://github.com/mtfum/LiteRTLMSwift
+```
+
+Or add it to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/mtfum/LiteRTLMSwift.git", from: "0.3.0"),
+    .package(url: "https://github.com/mtfum/LiteRTLMSwift.git", from: "0.1.0"),
+],
+targets: [
+    .target(
+        name: "YourTarget",
+        dependencies: [
+            .product(name: "LiteRTLMSwift", package: "LiteRTLMSwift"),
+        ]
+    ),
 ]
 ```
 
-Then add `LiteRTLM` to your target's dependencies:
-
-```swift
-.target(
-    name: "YourTarget",
-    dependencies: [
-        .product(name: "LiteRTLM", package: "LiteRTLMSwift"),
-    ]
-),
-```
-
-Or in Xcode: **File > Add Package Dependencies...** and enter the repository URL.
-
-### Required Xcode Build Settings
-
-This package provides the LiteRT-LM static library as an xcframework. You **must** configure the following build settings in your Xcode project:
-
-#### Other Linker Flags
-
-`-force_load` is required because LiteRT-LM registers CPU/GPU executors via static initializers. Without it, the linker strips these symbols, causing `Engine type not found: 1` at runtime.
-
-| Platform | Other Linker Flags |
-|---|---|
-| **iOS** | `-lc++ -force_load $(BUILD_DIR)/../../SourcePackages/artifacts/litertlmswift/LiteRTLM/LiteRTLM.xcframework/ios-arm64/LiteRTLM_arm64.a` |
-| **iOS Simulator** | `-lc++ -force_load $(BUILD_DIR)/../../SourcePackages/artifacts/litertlmswift/LiteRTLM/LiteRTLM.xcframework/ios-arm64-simulator/LiteRTLM_sim_arm64.a` |
-| **macOS** | `-lc++ -force_load $(BUILD_DIR)/../../SourcePackages/artifacts/litertlmswift/LiteRTLM/LiteRTLM.xcframework/macos-arm64/LiteRTLM_macos_arm64.a` |
-
-> **Tip**: Use per-SDK build settings in Xcode (`OTHER_LDFLAGS[sdk=iphoneos*]`, `OTHER_LDFLAGS[sdk=iphonesimulator*]`, `OTHER_LDFLAGS[sdk=macosx*]`) to apply the correct path for each platform automatically.
-
-#### Bridging Header
-
-Create a bridging header and import `engine.h`:
-
-```objc
-#import "engine.h"
-```
-
-Set **Header Search Paths** to include both device and simulator headers:
-
-```
-$(BUILD_DIR)/../../SourcePackages/artifacts/litertlmswift/LiteRTLM/LiteRTLM.xcframework/ios-arm64/Headers
-$(BUILD_DIR)/../../SourcePackages/artifacts/litertlmswift/LiteRTLM/LiteRTLM.xcframework/ios-arm64-simulator/Headers
-```
-
-> **Note**: The artifact directory name is `litertlmswift` (all lowercase, no hyphens), derived from the package identity.
+No additional build settings are required. The package handles `-lc++` and `-all_load` internally.
 
 ## Model File
 
-This package provides only the inference engine. You need to obtain a `.litertlm` model file separately.
-
-### Obtaining a Model
+This package provides only the inference engine. Obtain a `.litertlm` model file separately.
 
 Download a compatible model from the [LiteRT-LM releases](https://github.com/google-ai-edge/LiteRT-LM/releases) or convert one using the LiteRT-LM tools.
 
-### Placing the Model (iOS)
+### Adding the Model to an iOS App
 
-Place the `.litertlm` file in your app's Documents directory. To enable file transfer via iTunes/Finder, add to your `Info.plist`:
+Bundle the `.litertlm` file in your app target, then resolve the path at runtime:
+
+```swift
+let modelPath = Bundle.main.urls(forResourcesWithExtension: "litertlm", subdirectory: nil)!.first!.path
+```
+
+Or place it in the Documents directory and enable file sharing in `Info.plist`:
 
 ```xml
 <key>UIFileSharingEnabled</key><true/>
 <key>LSSupportsOpeningDocumentsInPlace</key><true/>
 ```
 
-Then resolve the path at runtime:
-
-```swift
-let modelPath = FileManager.default
-    .urls(for: .documentDirectory, in: .userDomainMask)[0]
-    .appendingPathComponent("gemma-4-E2B-it.litertlm")
-    .path
-```
-
-### Placing the Model (macOS)
-
-Place the `.litertlm` file in your app's sandbox container or bundle it as a resource. You can also use `NSOpenPanel` to let the user select the file at runtime.
-
 ## Usage
 
+### Initialize the Engine
+
 ```swift
-import Foundation
+import LiteRTLMSwift
 
-// Inference must run on a thread with a large stack size (16 MB+)
-let thread = Thread {
-    let modelPath = /* path to .litertlm file */
-
-    // 1. Create engine
-    let settings = litert_lm_engine_settings_create(modelPath, "cpu", nil, "cpu")!
-    defer { litert_lm_engine_settings_delete(settings) }
-
-    let engine = litert_lm_engine_create(settings)!
-    defer { litert_lm_engine_delete(engine) }
-
-    // 2. Create session
-    let session = litert_lm_engine_create_session(engine, nil)!
-    defer { litert_lm_session_delete(session) }
-
-    // 3. Generate content
-    var input = "Hello, world!".withCString { cStr -> InputData in
-        InputData(type: kInputText, data: cStr, size: strlen(cStr))
-    }
-    let responses = litert_lm_session_generate_content(session, &input, 1)!
-    defer { litert_lm_responses_delete(responses) }
-
-    let text = String(cString: litert_lm_responses_get_response_text_at(responses, 0))
-    print(text)
-}
-thread.stackSize = 16 * 1024 * 1024
-thread.start()
+let engine = try LiteRTLMEngine(modelPath: modelPath, maxTokens: 2048)
 ```
 
-> **Important**: The inference thread requires at least **16 MB** of stack size. The default thread stack (512 KB - 1 MB) will cause `EXC_BAD_ACCESS` crashes.
+`LiteRTLMEngine` is `@unchecked Sendable` and safe to use from any concurrency context.
 
-## Known Limitations
+### Text Generation (Streaming)
 
-- **CPU only**: GPU backend is not yet available in the upstream LiteRT-LM v0.10.1 (see [issue #1050](https://github.com/google-ai-edge/LiteRT-LM/issues/1050))
-- **Apple Silicon only**: macOS support is arm64 only (no Intel)
-- **Performance**: ~9-10 tokens/sec on iPhone (Gemma 4 E2B-it, CPU)
-- **Memory**: ~961 MB for Gemma 4 E2B-it model
-- **C API only**: No Swift wrapper is provided yet. You must use the C API via a bridging header.
+```swift
+let prompt = "<|turn>user\nExplain quantum computing in one paragraph.<turn|>\n<|turn>model\n\n"
+
+var response = ""
+for await chunk in engine.generate(prompt: prompt) {
+    response += chunk
+    print(chunk, terminator: "")
+}
+```
+
+### Audio Transcription (Streaming)
+
+Provide raw PCM audio: 16 kHz, mono, Float32.
+
+```swift
+let pcmData: Data = /* 16kHz mono Float32 PCM */
+
+var transcript = ""
+for await chunk in engine.transcribeAudio(pcmData: pcmData) {
+    transcript += chunk
+}
+```
+
+For long recordings, split audio into chunks and transcribe sequentially:
+
+```swift
+let chunks: [Data] = /* 30-second PCM chunks */
+
+for await text in engine.transcribeAudioChunks(chunks) {
+    transcript += text
+}
+```
+
+### Tool Calling (Experimental)
+
+```swift
+let prompt = """
+<|turn>system
+<|tool>declaration:getWeather{description:"get current weather",parameters:{city:{type:"STRING"}}}<tool|>
+<turn|>
+<|turn>user
+What's the weather in Tokyo?
+<turn|>
+<|turn>model
+
+"""
+
+for await chunk in engine.generateWithToolCalling(
+    prompt: prompt,
+    onToolCall: { funcName, argsJSON in
+        // Called when the model invokes a tool
+        print("Tool: \(funcName), args: \(argsJSON)")
+        return """{"temperature": 22, "condition": "sunny"}"""
+    }
+) {
+    print(chunk, terminator: "")
+}
+```
+
+### Reset Session (Clear KV Cache)
+
+Call `resetSession()` between independent inference calls to clear the KV cache:
+
+```swift
+try engine.resetSession()
+```
+
+## API Reference
+
+```swift
+public final class LiteRTLMEngine: @unchecked Sendable {
+
+    /// Initializes the engine and creates an inference session.
+    public init(modelPath: String, maxTokens: Int = 2048) throws
+
+    /// Clears the KV cache by recreating the session. Call between independent inferences.
+    public func resetSession() throws
+
+    /// Streams generated tokens for a text prompt.
+    public func generate(prompt: String) -> AsyncStream<String>
+
+    /// Streams transcription from raw PCM audio (16 kHz, mono, Float32).
+    public func transcribeAudio(pcmData: Data) -> AsyncStream<String>
+
+    /// Transcribes multiple PCM chunks sequentially, yielding text per chunk.
+    public func transcribeAudioChunks(_ chunks: [Data]) -> AsyncStream<String>
+
+    /// Generates with tool-calling support. Invokes `onToolCall` when the model calls a tool.
+    public func generateWithToolCalling(
+        prompt: String,
+        onToolCall: @Sendable @escaping (String, String) async -> String
+    ) -> AsyncStream<String>
+}
+```
 
 ## What's Included
 
-| Binary Target | Description |
+| Component | Description |
 |---|---|
-| `LiteRTLM` | LiteRT-LM inference engine (static xcframework) |
-| `GemmaModelConstraintProvider` | Structured Output / Function Calling support (dynamic xcframework, embedded automatically) |
+| `LiteRTLMSwift` (Swift) | `LiteRTLMEngine` — Swift wrapper with async streaming API |
+| `LiteRTLM` (C static lib) | LiteRT-LM inference engine xcframework |
+| `GemmaModelConstraintProvider` (dynamic lib) | Structured Output / Function Calling support |
 
-Both are included when you add the `LiteRTLM` product to your target.
+## Known Limitations
+
+- **iOS only**: macOS support is planned for a future release (`GemmaModelConstraintProvider` does not yet have a macOS slice)
+- **CPU only**: GPU backend is not yet available in upstream LiteRT-LM (see [issue #1050](https://github.com/google-ai-edge/LiteRT-LM/issues/1050))
+- **Apple Silicon only**: arm64 only — no iOS x86_64 simulator
+- **Performance**: ~9–10 tokens/sec on iPhone (Gemma 4 E2B-it, CPU)
+- **Memory**: ~961 MB for Gemma 4 E2B-it
 
 ## Based On
 
