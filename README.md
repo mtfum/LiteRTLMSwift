@@ -2,7 +2,7 @@
 
 > **Note**: This is an **unofficial** Swift Package wrapper for [LiteRT-LM](https://ai.google.dev/edge/litert-lm).
 > Google has announced that an [official Swift API is coming soon](https://ai.google.dev/edge/litert-lm).
-> Once the official iOS support is available, this repository will be **archived**.
+> Once official support is available, this repository will be **archived**.
 
 A Swift Package for distributing the [LiteRT-LM](https://ai.google.dev/edge/litert-lm) xcframework for iOS and macOS.
 
@@ -20,7 +20,7 @@ Add the following to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/mtfum/LiteRTLMSwift.git", from: "0.2.0"),
+    .package(url: "https://github.com/mtfum/LiteRTLMSwift.git", from: "0.1.0"),
 ]
 ```
 
@@ -41,21 +41,27 @@ Or in Xcode: **File > Add Package Dependencies...** and enter the repository URL
 
 This package provides the LiteRT-LM static library as an xcframework. You **must** configure the following build settings in your Xcode project:
 
-| Setting | Value |
+#### Other Linker Flags
+
+`-force_load` is required because LiteRT-LM registers CPU/GPU executors via static initializers. Without it, the linker strips these symbols, causing `Engine type not found: 1` at runtime.
+
+| Platform | Other Linker Flags |
 |---|---|
-| **Other Linker Flags** | `-lc++ -force_load $(BUILD_DIR)/../../SourcePackages/artifacts/litertmlswift/LiteRTLM/LiteRTLM.xcframework/ios-arm64/LiteRTLM_arm64.a` |
-| **Swift Objective-C Bridging Header** | Path to your bridging header |
-| **Header Search Paths** | `$(BUILD_DIR)/../../SourcePackages/artifacts/litertmlswift/LiteRTLM/LiteRTLM.xcframework/ios-arm64/Headers` |
+| **iOS** | `-lc++ -force_load $(BUILD_DIR)/../../SourcePackages/artifacts/litertmlswift/LiteRTLM/LiteRTLM.xcframework/ios-arm64/LiteRTLM_arm64.a` |
+| **iOS Simulator** | `-lc++ -force_load $(BUILD_DIR)/../../SourcePackages/artifacts/litertmlswift/LiteRTLM/LiteRTLM.xcframework/ios-arm64-simulator/LiteRTLM_sim_arm64.a` |
+| **macOS** | `-lc++ -force_load $(BUILD_DIR)/../../SourcePackages/artifacts/litertmlswift/LiteRTLM/LiteRTLM.xcframework/macos-arm64/LiteRTLM_macos_arm64.a` |
 
-> **Why `-force_load`?** LiteRT-LM registers CPU/GPU executors via static initializers. Without `-force_load`, the linker strips these symbols, causing `Engine type not found: 1` at runtime.
+> **Tip**: Use `EXCLUDED_ARCHS` or per-SDK build settings in Xcode to apply the correct path for each platform.
 
-### Bridging Header
+#### Bridging Header
 
 Create a bridging header and import `engine.h`:
 
 ```objc
 #import "engine.h"
 ```
+
+Set **Header Search Paths** to point to the Headers directory in the xcframework (e.g., `$(BUILD_DIR)/../../SourcePackages/artifacts/litertmlswift/LiteRTLM/LiteRTLM.xcframework/ios-arm64/Headers`).
 
 ## Model File
 
@@ -65,7 +71,7 @@ This package provides only the inference engine. You need to obtain a `.litertlm
 
 Download a compatible model from the [LiteRT-LM releases](https://github.com/google-ai-edge/LiteRT-LM/releases) or convert one using the LiteRT-LM tools.
 
-### Placing the Model
+### Placing the Model (iOS)
 
 Place the `.litertlm` file in your app's Documents directory. To enable file transfer via iTunes/Finder, add to your `Info.plist`:
 
@@ -73,6 +79,10 @@ Place the `.litertlm` file in your app's Documents directory. To enable file tra
 <key>UIFileSharingEnabled</key><true/>
 <key>LSSupportsOpeningDocumentsInPlace</key><true/>
 ```
+
+### Placing the Model (macOS)
+
+Place the `.litertlm` file in your app's sandbox container or bundle it as a resource. You can also use `NSOpenPanel` to let the user select the file at runtime.
 
 ## Usage
 
@@ -113,6 +123,7 @@ thread.start()
 ## Known Limitations
 
 - **CPU only**: GPU backend is not yet available in the upstream LiteRT-LM v0.10.1 (see [issue #1050](https://github.com/google-ai-edge/LiteRT-LM/issues/1050))
+- **Apple Silicon only**: macOS support is arm64 only (no Intel)
 - **Performance**: ~9-10 tokens/sec on iPhone (Gemma 4 E2B-it, CPU)
 - **Memory**: ~961 MB for Gemma 4 E2B-it model
 - **C API only**: No Swift wrapper is provided yet. You must use the C API via a bridging header.
@@ -120,7 +131,7 @@ thread.start()
 ## Based On
 
 - [LiteRT-LM v0.10.1](https://github.com/google-ai-edge/LiteRT-LM/tree/v0.10.1)
-- Build instructions: [build-litert-lm-ios.md](build-litert-lm-ios.md)
+- Build instructions: [build-litert-lm.md](build-litert-lm.md)
 
 ## License
 
