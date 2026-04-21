@@ -10,7 +10,7 @@ A Swift Package that wraps the [LiteRT-LM](https://ai.google.dev/edge/litert-lm)
 
 ## Requirements
 
-- iOS 16.0+ / macOS 13.0+
+- iOS 16.0+ / macOS 15.0+
 - Xcode 16.0+
 - A `.litertlm` model file (e.g., `gemma-4-E2B-it.litertlm`)
 
@@ -182,7 +182,6 @@ public final class LiteRTLMEngine: @unchecked Sendable {
 
 ## Known Limitations
 
-- **iOS only**: macOS support is planned for a future release (`GemmaModelConstraintProvider` does not yet have a macOS slice)
 - **CPU only**: GPU backend is not yet available in upstream LiteRT-LM (see [issue #1050](https://github.com/google-ai-edge/LiteRT-LM/issues/1050))
 - **Apple Silicon only**: arm64 only — no iOS x86_64 simulator
 - **Performance**: ~9–10 tokens/sec on iPhone (Gemma 4 E2B-it, CPU)
@@ -190,7 +189,7 @@ public final class LiteRTLMEngine: @unchecked Sendable {
 
 ## Based On
 
-- [LiteRT-LM v0.10.1](https://github.com/google-ai-edge/LiteRT-LM/tree/v0.10.1)
+- [LiteRT-LM v0.10.2](https://github.com/google-ai-edge/LiteRT-LM/tree/v0.10.2)
 - Build instructions: [build-litert-lm.md](build-litert-lm.md)
 
 ## License
