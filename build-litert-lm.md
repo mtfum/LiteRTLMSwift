@@ -23,7 +23,7 @@ sudo xcode-select -s /Applications/Xcode-*.app/Contents/Developer
 ```bash
 git clone https://github.com/google-ai-edge/LiteRT-LM.git
 cd LiteRT-LM
-git checkout v0.10.1       # 最新安定版
+git checkout v0.10.2       # 最新安定版
 git lfs checkout           # GPU 用プリビルドバイナリ取得（CPU のみなら不要）
 ```
 
@@ -135,30 +135,40 @@ libtool -static -filelist /tmp/macos_arm64_archives.txt \
 
 ## Step 5: XCFramework 作成
 
-`engine.h` を Headers ディレクトリに用意してから XCFramework 化する。
+`engine.h` と `litert_lm_logging.h` を Headers ディレクトリに用意してから XCFramework 化する。
 
 ```bash
-mkdir -p LiteRTLM/Headers
-cp /path/to/LiteRT-LM/c/engine.h LiteRTLM/Headers/
+LITERT_LM=/path/to/LiteRT-LM
+mkdir -p Headers
+cp "$LITERT_LM/c/engine.h" Headers/
+cp "$LITERT_LM/c/litert_lm_logging.h" Headers/
 ```
 
-### iOS のみ（0.1.0）
+### iOS + macOS
 
 ```bash
 xcodebuild -create-xcframework \
-  -library LiteRTLM_arm64.a     -headers LiteRTLM/Headers \
-  -library LiteRTLM_sim_arm64.a -headers LiteRTLM/Headers \
+  -library LiteRTLM_arm64.a       -headers Headers \
+  -library LiteRTLM_sim_arm64.a   -headers Headers \
+  -library LiteRTLM_macos_arm64.a -headers Headers \
   -output LiteRTLM.xcframework
 ```
 
-### iOS + macOS（0.2.0）
+---
+
+## GemmaModelConstraintProvider XCFramework 作成
+
+`GemmaModelConstraintProvider.dylib` は LiteRT-LM の `prebuilt/` ディレクトリに含まれる。
+ビルド不要で xcframework を直接作成できる。
 
 ```bash
+LITERT_LM=/path/to/LiteRT-LM
+
 xcodebuild -create-xcframework \
-  -library LiteRTLM_arm64.a       -headers LiteRTLM/Headers \
-  -library LiteRTLM_sim_arm64.a   -headers LiteRTLM/Headers \
-  -library LiteRTLM_macos_arm64.a -headers LiteRTLM/Headers \
-  -output LiteRTLM.xcframework
+  -library "$LITERT_LM/prebuilt/ios_arm64/libGemmaModelConstraintProvider.dylib" \
+  -library "$LITERT_LM/prebuilt/ios_sim_arm64/libGemmaModelConstraintProvider.dylib" \
+  -library "$LITERT_LM/prebuilt/macos_arm64/libGemmaModelConstraintProvider.dylib" \
+  -output GemmaModelConstraintProvider.xcframework
 ```
 
 ---
@@ -168,14 +178,16 @@ xcodebuild -create-xcframework \
 ```bash
 # zip 作成
 zip -r LiteRTLM.xcframework.zip LiteRTLM.xcframework
+zip -r GemmaModelConstraintProvider.xcframework.zip GemmaModelConstraintProvider.xcframework
 
 # checksum 算出
 swift package compute-checksum LiteRTLM.xcframework.zip
+swift package compute-checksum GemmaModelConstraintProvider.xcframework.zip
 
 # GitHub Release 作成
-gh release create <version> LiteRTLM.xcframework.zip \
+gh release create <version> LiteRTLM.xcframework.zip GemmaModelConstraintProvider.xcframework.zip \
   --title "<version>" \
-  --notes "Based on LiteRT-LM v0.10.1"
+  --notes "Based on LiteRT-LM v0.10.2"
 
 # Package.swift の url と checksum を更新
 ```

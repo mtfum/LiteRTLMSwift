@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
 
 import PackageDescription
 
@@ -6,6 +6,7 @@ let package = Package(
     name: "LiteRTLMSwift",
     platforms: [
         .iOS(.v16),
+        .macOS(.v15),
     ],
     products: [
         .library(
@@ -17,12 +18,12 @@ let package = Package(
         .binaryTarget(
             name: "LiteRTLM",
             url: "https://github.com/mtfum/LiteRTLMSwift/releases/download/0.1.0/LiteRTLM.xcframework.zip",
-            checksum: "34c4734bdf232384a62be880923dac8debd4632412d0e29484ac463ae66feec5"
+            checksum: "11fa21ba9617f5ca1b6162501b2fa5d34e4d8ea8f15eba408ace10be9a64dd32"
         ),
         .binaryTarget(
             name: "GemmaModelConstraintProvider",
             url: "https://github.com/mtfum/LiteRTLMSwift/releases/download/0.1.0/GemmaModelConstraintProvider.xcframework.zip",
-            checksum: "0ce1cd58f7a35c7dc229c2d425c9ea8dc16e1df49a77a58b7afd5394edfd1de7"
+            checksum: "ea45ee95025605ca6908f97b3961d0f675e972165905599ad7a78c916fe061f9"
         ),
         .target(
             name: "LiteRTLMSwift",
