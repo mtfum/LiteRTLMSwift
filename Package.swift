@@ -30,7 +30,6 @@ let package = Package(
             path: "Sources/LiteRTLMSwift",
             linkerSettings: [
                 .linkedLibrary("c++"),
-                .unsafeFlags(["-all_load"]),
             ]
         ),
     ]
