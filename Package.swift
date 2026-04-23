@@ -22,8 +22,8 @@ let package = Package(
         ),
         .binaryTarget(
             name: "GemmaModelConstraintProvider",
-            url: "https://github.com/mtfum/LiteRTLMSwift/releases/download/0.1.3/GemmaModelConstraintProvider.xcframework.zip",
-            checksum: "753c4aae1870cc88f9752c164a670cb9e9df9e1475237fbe9208f43cd71cbc4f"
+            url: "https://github.com/mtfum/LiteRTLMSwift/releases/download/0.1.4/GemmaModelConstraintProvider.xcframework.zip",
+            checksum: "8a95d84322981ab3babf745f8cdfe64634bef5b89e23266793bc6d3a110f5948"
         ),
         .target(
             name: "LiteRTLMSwift",
