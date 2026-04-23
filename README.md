@@ -28,7 +28,7 @@ Or add it to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/mtfum/LiteRTLMSwift.git", from: "0.1.0"),
+    .package(url: "https://github.com/mtfum/LiteRTLMSwift.git", from: "0.1.4"),
 ],
 targets: [
     .target(
@@ -178,7 +178,7 @@ public final class LiteRTLMEngine: @unchecked Sendable {
 |---|---|
 | `LiteRTLMSwift` (Swift) | `LiteRTLMEngine` — Swift wrapper with async streaming API |
 | `LiteRTLM` (C static lib) | LiteRT-LM inference engine xcframework |
-| `GemmaModelConstraintProvider` (dynamic lib) | Structured Output / Function Calling support |
+| `GemmaModelConstraintProvider` (dynamic framework) | Structured Output / Function Calling support |
 
 ## Known Limitations
 
