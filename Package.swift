@@ -17,13 +17,13 @@ let package = Package(
     targets: [
         .binaryTarget(
             name: "LiteRTLM",
-            url: "https://github.com/mtfum/LiteRTLMSwift/releases/download/0.1.4/LiteRTLM_0.1.4.xcframework.zip",
-            checksum: "adf7f6da02a1cf2e510726e3c933ddc7f77038631f93e6b6312839bb231d08a7"
+            url: "https://github.com/mtfum/LiteRTLMSwift/releases/download/0.1.5/LiteRTLM_0.1.5.xcframework.zip",
+            checksum: "62e5d5226d6dad889fe790037a792c6519609e4f4995e2a25f0cd767a4e9c1bd"
         ),
         .binaryTarget(
             name: "GemmaModelConstraintProvider",
-            url: "https://github.com/mtfum/LiteRTLMSwift/releases/download/0.1.4/GemmaModelConstraintProvider_0.1.4.xcframework.zip",
-            checksum: "c645fa6573797e9e5e113474406cd6e703c708eb502657631be1397fe65ab507"
+            url: "https://github.com/mtfum/LiteRTLMSwift/releases/download/0.1.5/GemmaModelConstraintProvider_0.1.5.xcframework.zip",
+            checksum: "b584f8c2ec3920c7de927f01101761cd4fe63f7c82a4e242d12efb13aed44daa"
         ),
         .target(
             name: "LiteRTLMSwift",
