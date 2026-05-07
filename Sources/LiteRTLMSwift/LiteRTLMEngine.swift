@@ -5,6 +5,8 @@ import LiteRTLM
 /// Runs inference on a dedicated thread with a large stack (required by LiteRT-LM).
 public final class LiteRTLMEngine: @unchecked Sendable {
 
+    public enum Backend { case cpu, gpu }
+
     public enum LiteRTError: Swift.Error, LocalizedError {
         case settingsCreationFailed
         case engineCreationFailed
@@ -25,15 +27,23 @@ public final class LiteRTLMEngine: @unchecked Sendable {
     /// Initializes the LiteRT-LM engine and creates an inference session.
     /// - Parameters:
     ///   - modelPath: Absolute path to a `.litertlm` model file.
-    ///   - maxTokens: Maximum token context length. Defaults to 2048.
-    public init(modelPath: String, maxTokens: Int = 2048) throws {
-        guard let settings = litert_lm_engine_settings_create(modelPath, "cpu", nil, "cpu") else {
+    ///   - maxTokens: Maximum token context length. `0` (default) lets the engine use the value
+    ///     embedded in the model file (e.g. 128k for Gemma 4).
+    ///   - backend: Compute backend. `.cpu` (default) or `.gpu` (Metal, device only).
+    public init(modelPath: String, maxTokens: Int = 0, backend: Backend = .cpu) throws {
+        let backendStr = backend == .gpu ? "gpu" : "cpu"
+        guard let settings = litert_lm_engine_settings_create(modelPath, backendStr, nil, backendStr) else {
             throw LiteRTError.settingsCreationFailed
         }
-        litert_lm_engine_settings_set_max_num_tokens(settings, Int32(maxTokens))
+        if maxTokens > 0 {
+            litert_lm_engine_settings_set_max_num_tokens(settings, Int32(maxTokens))
+        }
         litert_lm_engine_settings_set_prefill_chunk_size(settings, 128)
         if let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.path {
             litert_lm_engine_settings_set_cache_dir(settings, cacheDir)
+        }
+        if backend == .gpu {
+            litert_lm_engine_settings_set_enable_speculative_decoding(settings, true)
         }
         defer { litert_lm_engine_settings_delete(settings) }
 
@@ -164,17 +174,17 @@ public final class LiteRTLMEngine: @unchecked Sendable {
                 prefix.withCString { prefixPtr in
                     suffix.withCString { suffixPtr in
                         pcmData.withUnsafeBytes { rawBuffer in
-                            var inputs: [InputData] = [
-                                InputData(type: kInputText,
+                            var inputs: [LiteRtLmInputData] = [
+                                LiteRtLmInputData(type: kLiteRtLmInputDataTypeText,
                                           data: UnsafeRawPointer(prefixPtr),
                                           size: prefix.utf8.count),
-                                InputData(type: kInputAudio,
+                                LiteRtLmInputData(type: kLiteRtLmInputDataTypeAudio,
                                           data: rawBuffer.baseAddress,
                                           size: pcmData.count),
-                                InputData(type: kInputAudioEnd,
+                                LiteRtLmInputData(type: kLiteRtLmInputDataTypeAudioEnd,
                                           data: nil,
                                           size: 0),
-                                InputData(type: kInputText,
+                                LiteRtLmInputData(type: kLiteRtLmInputDataTypeText,
                                           data: UnsafeRawPointer(suffixPtr),
                                           size: suffix.utf8.count),
                             ]
@@ -201,8 +211,7 @@ public final class LiteRTLMEngine: @unchecked Sendable {
 
     private func makeConversationAudioStream(pcmData: Data) -> AsyncStream<String> {
         return AsyncStream { continuation in
-            guard let configPtr = litert_lm_conversation_config_create(
-                self.enginePtr, nil, nil, nil, nil, false) else {
+            guard let configPtr = litert_lm_conversation_config_create() else {
                 continuation.finish()
                 return
             }
@@ -274,17 +283,17 @@ public final class LiteRTLMEngine: @unchecked Sendable {
                 prefix.withCString { prefixPtr in
                     suffix.withCString { suffixPtr in
                         pcmData.withUnsafeBytes { rawBuffer in
-                            var inputs: [InputData] = [
-                                InputData(type: kInputText,
+                            var inputs: [LiteRtLmInputData] = [
+                                LiteRtLmInputData(type: kLiteRtLmInputDataTypeText,
                                           data: UnsafeRawPointer(prefixPtr),
                                           size: prefix.utf8.count),
-                                InputData(type: kInputAudio,
+                                LiteRtLmInputData(type: kLiteRtLmInputDataTypeAudio,
                                           data: rawBuffer.baseAddress,
                                           size: pcmData.count),
-                                InputData(type: kInputAudioEnd,
+                                LiteRtLmInputData(type: kLiteRtLmInputDataTypeAudioEnd,
                                           data: nil,
                                           size: 0),
-                                InputData(type: kInputText,
+                                LiteRtLmInputData(type: kLiteRtLmInputDataTypeText,
                                           data: UnsafeRawPointer(suffixPtr),
                                           size: suffix.utf8.count),
                             ]
@@ -324,8 +333,8 @@ public final class LiteRTLMEngine: @unchecked Sendable {
 
             let thread = Thread {
                 prompt.withCString { promptPtr in
-                    var inputs: [InputData] = [
-                        InputData(type: kInputText,
+                    var inputs: [LiteRtLmInputData] = [
+                        LiteRtLmInputData(type: kLiteRtLmInputDataTypeText,
                                   data: UnsafeRawPointer(promptPtr),
                                   size: prompt.utf8.count),
                     ]

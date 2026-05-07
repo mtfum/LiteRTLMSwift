@@ -23,7 +23,7 @@ sudo xcode-select -s /Applications/Xcode-*.app/Contents/Developer
 ```bash
 git clone https://github.com/google-ai-edge/LiteRT-LM.git
 cd LiteRT-LM
-git checkout v0.10.2       # 最新安定版
+git checkout v0.11.0       # 最新安定版
 git lfs checkout           # GPU 用プリビルドバイナリ取得（CPU のみなら不要）
 ```
 
@@ -187,7 +187,7 @@ swift package compute-checksum GemmaModelConstraintProvider.xcframework.zip
 # GitHub Release 作成
 gh release create <version> LiteRTLM.xcframework.zip GemmaModelConstraintProvider.xcframework.zip \
   --title "<version>" \
-  --notes "Based on LiteRT-LM v0.10.2"
+  --notes "Based on LiteRT-LM v0.11.0"
 
 # Package.swift の url と checksum を更新
 ```
@@ -239,7 +239,7 @@ thread.start()
 
 ### 3. GPU サポート（現状）
 
-v0.10.1 時点で GPU 実行に必要な Metal Sampler dylib は未提供（issue #1050）。CPU バックエンドのみ動作する。
+v0.11.0 から `prebuilt/ios_arm64/` に `libLiteRtMetalAccelerator.dylib` / `libLiteRtTopKMetalSampler.dylib` が追加され、iOS デバイスでの GPU (Metal) バックエンドが利用可能になった。シミュレータ向けは未提供。
 
 ### 4. パフォーマンス目安
 
