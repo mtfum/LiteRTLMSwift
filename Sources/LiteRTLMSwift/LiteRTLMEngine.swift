@@ -32,7 +32,9 @@ public final class LiteRTLMEngine: @unchecked Sendable {
     ///   - backend: Compute backend. `.cpu` (default) or `.gpu` (Metal, device only).
     public init(modelPath: String, maxTokens: Int = 0, backend: Backend = .cpu) throws {
         let backendStr = backend == .gpu ? "gpu" : "cpu"
-        guard let settings = litert_lm_engine_settings_create(modelPath, backendStr, nil, backendStr) else {
+        // Audio/vision sections in current models carry a cpu-only backend constraint,
+        // so always use "cpu" for those regardless of the main backend.
+        guard let settings = litert_lm_engine_settings_create(modelPath, backendStr, nil, "cpu") else {
             throw LiteRTError.settingsCreationFailed
         }
         if maxTokens > 0 {

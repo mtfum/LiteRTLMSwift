@@ -26,6 +26,11 @@ let package = Package(
             checksum: "50264dc2ea2d52f3f0825aa3cb2ad1a68df2b985ede11a2f7b412f20118461c8"
         ),
         .binaryTarget(
+            name: "LiteRt",
+            url: "https://github.com/mtfum/LiteRTLMSwift/releases/download/0.2.0/LiteRt_0.2.0.xcframework.zip",
+            checksum: "5065635c2747710c222c471aa873fb3b33660df3612b68817477094dd4db105b"
+        ),
+        .binaryTarget(
             name: "LiteRtMetalAccelerator",
             url: "https://github.com/mtfum/LiteRTLMSwift/releases/download/0.2.0/LiteRtMetalAccelerator_0.2.0.xcframework.zip",
             checksum: "63c012e45c213d6e246cc7e2e897c7130a5a61469a02af9b56560521261b2f94"
@@ -38,7 +43,7 @@ let package = Package(
         .target(
             name: "LiteRTLMSwift",
             dependencies: ["LiteRTLM", "GemmaModelConstraintProvider",
-                           "LiteRtMetalAccelerator", "LiteRtTopKMetalSampler"],
+                           "LiteRt", "LiteRtMetalAccelerator", "LiteRtTopKMetalSampler"],
             path: "Sources/LiteRTLMSwift",
             linkerSettings: [
                 .linkedLibrary("c++"),
