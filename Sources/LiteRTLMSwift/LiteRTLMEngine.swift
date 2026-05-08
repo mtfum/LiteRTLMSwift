@@ -40,7 +40,9 @@ public final class LiteRTLMEngine: @unchecked Sendable {
         if maxTokens > 0 {
             litert_lm_engine_settings_set_max_num_tokens(settings, Int32(maxTokens))
         }
-        litert_lm_engine_settings_set_prefill_chunk_size(settings, 128)
+        if backend == .cpu {
+            litert_lm_engine_settings_set_prefill_chunk_size(settings, 128)
+        }
         if let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.path {
             litert_lm_engine_settings_set_cache_dir(settings, cacheDir)
         }
@@ -49,7 +51,14 @@ public final class LiteRTLMEngine: @unchecked Sendable {
         }
         defer { litert_lm_engine_settings_delete(settings) }
 
-        guard let engine = litert_lm_engine_create(settings) else {
+        // On devices with insufficient GPU VRAM, speculative decoding (which loads a second
+        // drafter model onto the GPU) may fail. Fall back to disabling it and retry.
+        var engine = litert_lm_engine_create(settings)
+        if engine == nil && backend == .gpu {
+            litert_lm_engine_settings_set_enable_speculative_decoding(settings, false)
+            engine = litert_lm_engine_create(settings)
+        }
+        guard let engine else {
             throw LiteRTError.engineCreationFailed
         }
 
