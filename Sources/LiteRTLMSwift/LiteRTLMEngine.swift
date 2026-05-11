@@ -277,7 +277,7 @@ public final class LiteRTLMEngine: @unchecked Sendable {
 
             let base64Audio = pcmData.base64EncodedString()
             let messageJSON = """
-            {"role":"user","content":[{"type":"audio","blob":{"mime_type":"audio/pcm;rate=16000","data":"\(base64Audio)"}},{"type":"text","text":"Transcribe this audio"}]}
+            {"role":"user","content":[{"type":"audio","mime_type":"audio/pcm;rate=16000","blob":"\(base64Audio)"},{"type":"text","text":"Transcribe this audio"}]}
             """
             print("[Conv] messageJSON length: \(messageJSON.count) chars")
 
