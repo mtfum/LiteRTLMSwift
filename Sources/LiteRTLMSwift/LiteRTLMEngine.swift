@@ -221,6 +221,38 @@ public final class LiteRTLMEngine: @unchecked Sendable {
         }
     }
 
+    // Wraps raw Float32 PCM (16 kHz, mono) in a WAV container so miniaudio can decode it.
+    private static func float32PCMtoWAV(_ pcmData: Data, sampleRate: Int) -> Data {
+        let numChannels: UInt16 = 1
+        let bitsPerSample: UInt16 = 32
+        let byteRate = UInt32(sampleRate) * UInt32(numChannels) * UInt32(bitsPerSample) / 8
+        let blockAlign: UInt16 = numChannels * bitsPerSample / 8
+        let dataSize = UInt32(pcmData.count)
+        let chunkSize = 36 + dataSize
+
+        var wav = Data(capacity: Int(chunkSize) + 8)
+        func appendLE<T: FixedWidthInteger>(_ v: T) {
+            var le = v.littleEndian
+            wav.append(Data(bytes: &le, count: MemoryLayout<T>.size))
+        }
+
+        wav.append(contentsOf: "RIFF".utf8)
+        appendLE(chunkSize)
+        wav.append(contentsOf: "WAVE".utf8)
+        wav.append(contentsOf: "fmt ".utf8)
+        appendLE(UInt32(16))        // fmt chunk size
+        appendLE(UInt16(3))         // PCM float = 3
+        appendLE(numChannels)
+        appendLE(UInt32(sampleRate))
+        appendLE(byteRate)
+        appendLE(blockAlign)
+        appendLE(bitsPerSample)
+        wav.append(contentsOf: "data".utf8)
+        appendLE(dataSize)
+        wav.append(pcmData)
+        return wav
+    }
+
     private func makeConversationAudioStream(pcmData: Data) -> AsyncStream<String> {
         print("[Conv] makeConversationAudioStream: \(pcmData.count) bytes")
         // LiteRT-LM allows only one session OR conversation at a time.
@@ -275,9 +307,11 @@ public final class LiteRTLMEngine: @unchecked Sendable {
                 }
             }
 
-            let base64Audio = pcmData.base64EncodedString()
+            let wavData = Self.float32PCMtoWAV(pcmData, sampleRate: 16000)
+            let base64Audio = wavData.base64EncodedString()
+            print("[Conv] WAV size: \(wavData.count) bytes, base64: \(base64Audio.count) chars")
             let messageJSON = """
-            {"role":"user","content":[{"type":"audio","mime_type":"audio/pcm;rate=16000","blob":"\(base64Audio)"},{"type":"text","text":"Transcribe this audio"}]}
+            {"role":"user","content":[{"type":"audio","mime_type":"audio/wav","blob":"\(base64Audio)"},{"type":"text","text":"Transcribe this audio"}]}
             """
             print("[Conv] messageJSON length: \(messageJSON.count) chars")
 
