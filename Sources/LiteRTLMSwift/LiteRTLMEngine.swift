@@ -22,7 +22,7 @@ public final class LiteRTLMEngine: @unchecked Sendable {
     }
 
     private let enginePtr: OpaquePointer
-    private var sessionPtr: OpaquePointer
+    private var sessionPtr: OpaquePointer?
 
     /// Initializes the LiteRT-LM engine and creates an inference session.
     /// - Parameters:
@@ -72,15 +72,16 @@ public final class LiteRTLMEngine: @unchecked Sendable {
     }
 
     deinit {
-        litert_lm_session_delete(sessionPtr)
+        sessionPtr.map { litert_lm_session_delete($0) }
         litert_lm_engine_delete(enginePtr)
     }
 
     /// Clears the KV cache by recreating the session.
     /// Call between independent inferences. Do not call while inference is in progress.
     public func resetSession() throws {
-        litert_lm_session_delete(sessionPtr)
+        sessionPtr.map { litert_lm_session_delete($0) }
         guard let newSession = litert_lm_engine_create_session(enginePtr, nil) else {
+            sessionPtr = nil
             throw LiteRTError.sessionCreationFailed
         }
         sessionPtr = newSession
@@ -92,7 +93,7 @@ public final class LiteRTLMEngine: @unchecked Sendable {
     /// - Parameter pcmData: Raw audio in 16 kHz, mono, Float32 format.
     /// - Returns: An `AsyncStream` that yields transcription tokens as they are generated.
     public func transcribeAudio(pcmData: Data) -> AsyncStream<String> {
-        makeInterleavedStream(pcmData: pcmData)
+        makeConversationAudioStream(pcmData: pcmData)
     }
 
     /// Streams generated tokens for a text-only prompt.
@@ -221,19 +222,39 @@ public final class LiteRTLMEngine: @unchecked Sendable {
     }
 
     private func makeConversationAudioStream(pcmData: Data) -> AsyncStream<String> {
+        print("[Conv] makeConversationAudioStream: \(pcmData.count) bytes")
+        // LiteRT-LM allows only one session OR conversation at a time.
+        // Release the persistent session so the conversation API can take the slot.
+        sessionPtr.map { litert_lm_session_delete($0) }
+        sessionPtr = nil
+
         return AsyncStream { continuation in
             guard let configPtr = litert_lm_conversation_config_create() else {
+                print("[Conv] conversation_config_create failed")
+                self.sessionPtr = litert_lm_engine_create_session(self.enginePtr, nil)
                 continuation.finish()
                 return
             }
             guard let convPtr = litert_lm_conversation_create(self.enginePtr, configPtr) else {
+                print("[Conv] conversation_create failed")
                 litert_lm_conversation_config_delete(configPtr)
+                self.sessionPtr = litert_lm_engine_create_session(self.enginePtr, nil)
                 continuation.finish()
                 return
             }
             litert_lm_conversation_config_delete(configPtr)
+            print("[Conv] conversation created, sending message (\(pcmData.count) bytes PCM)")
 
-            let box = ConvContinuationBox(continuation, convPtr)
+            let enginePtr = self.enginePtr
+            let box = ConvContinuationBox(continuation, convPtr) { [weak self] in
+                let newSession = litert_lm_engine_create_session(enginePtr, nil)
+                self?.sessionPtr = newSession
+                if newSession != nil {
+                    print("[Conv] session restored after conversation")
+                } else {
+                    print("[Conv] ERROR: failed to restore session after conversation")
+                }
+            }
             let boxPtr = Unmanaged.passRetained(box).toOpaque()
 
             let callback: LiteRtLmStreamCallback = { boxPtr, chunk, isFinal, errorMsg in
@@ -241,9 +262,14 @@ public final class LiteRTLMEngine: @unchecked Sendable {
                 let box = Unmanaged<ConvContinuationBox>.fromOpaque(boxPtr).takeUnretainedValue()
                 if let chunk {
                     let text = String(cString: chunk)
-                    if !text.isEmpty { box.continuation.yield(text) }
+                    if !text.isEmpty {
+                        box.tokenCount += 1
+                        if box.tokenCount <= 5 { print("[Conv] token #\(box.tokenCount): '\(text)'") }
+                        box.continuation.yield(text)
+                    }
                 }
                 if isFinal {
+                    print("[Conv] isFinal, totalTokens=\(box.tokenCount)")
                     box.continuation.finish()
                     Unmanaged<ConvContinuationBox>.fromOpaque(boxPtr).release()
                 }
@@ -251,13 +277,15 @@ public final class LiteRTLMEngine: @unchecked Sendable {
 
             let base64Audio = pcmData.base64EncodedString()
             let messageJSON = """
-            {"role":"user","content":[{"type":"audio","inline_data":{"mime_type":"audio/pcm;rate=16000","data":"\(base64Audio)"}},{"type":"text","text":"Transcribe this audio"}]}
+            {"role":"user","content":[{"type":"audio","blob":{"mime_type":"audio/pcm;rate=16000","data":"\(base64Audio)"}},{"type":"text","text":"Transcribe this audio"}]}
             """
+            print("[Conv] messageJSON length: \(messageJSON.count) chars")
 
             let thread = Thread {
                 let rc = litert_lm_conversation_send_message_stream(
                     convPtr, messageJSON, nil, callback, boxPtr)
                 if rc != 0 {
+                    print("[Conv] send_message_stream failed: rc=\(rc)")
                     Unmanaged<ConvContinuationBox>.fromOpaque(boxPtr)
                         .takeRetainedValue().continuation.finish()
                 }
@@ -268,7 +296,9 @@ public final class LiteRTLMEngine: @unchecked Sendable {
     }
 
     private func makeInterleavedStream(pcmData: Data) -> AsyncStream<String> {
-        let session = sessionPtr
+        guard let session = sessionPtr else {
+            return AsyncStream { $0.finish() }
+        }
 
         let prefix = "<|turn>user\n"
         let suffix = "\nTranscribe this audio<turn|>\n<|turn>model\n"
@@ -324,7 +354,9 @@ public final class LiteRTLMEngine: @unchecked Sendable {
     }
 
     private func makeSessionStream(prompt: String) -> AsyncStream<String> {
-        let session = sessionPtr
+        guard let session = sessionPtr else {
+            return AsyncStream { $0.finish() }
+        }
         return AsyncStream { continuation in
             let box = ContinuationBox(continuation)
             let boxPtr = Unmanaged.passRetained(box).toOpaque()
@@ -373,9 +405,15 @@ private final class ContinuationBox: @unchecked Sendable {
 private final class ConvContinuationBox: @unchecked Sendable {
     let continuation: AsyncStream<String>.Continuation
     let convPtr: OpaquePointer
-    init(_ continuation: AsyncStream<String>.Continuation, _ convPtr: OpaquePointer) {
+    var tokenCount: Int = 0
+    private let onDeinit: () -> Void
+    init(_ continuation: AsyncStream<String>.Continuation, _ convPtr: OpaquePointer, onDeinit: @escaping () -> Void = {}) {
         self.continuation = continuation
         self.convPtr = convPtr
+        self.onDeinit = onDeinit
     }
-    deinit { litert_lm_conversation_delete(convPtr) }
+    deinit {
+        litert_lm_conversation_delete(convPtr)
+        onDeinit()
+    }
 }
